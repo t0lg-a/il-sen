@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IL Dem Senate Primary — County Projection</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow-y:auto;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:#f5f5f3;color:#1a1a1a}
+.container{max-width:1140px;margin:0 auto;padding:16px 24px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid #d4d4d4;margin-bottom:16px}
+header h1{font-size:20px;font-weight:700;letter-spacing:-0.02em}
+header .meta{font-size:11px;color:#777}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.premise{background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:16px;line-height:1.5}
+
+.controls{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.controls button{padding:6px 14px;border:1px solid #d4d4d4;border-radius:4px;background:#fff;font-size:12px;cursor:pointer;font-weight:500}
+.controls button:hover{background:#f0f0ed}
+.controls button.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.controls .status{font-size:11px;color:#888}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.card{background:#fff;border:1px solid #e0e0dc;border-radius:8px;padding:14px;text-align:center}
+.card .label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#999;font-weight:600;margin-bottom:4px}
+.card .value{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.card .sub{font-size:10px;color:#888;margin-top:2px}
+
+.section{margin-bottom:24px}
+.section-title{font-size:15px;font-weight:700;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e0e0dc}
+
+.proj-grid{display:grid;grid-template-columns:150px 1fr 70px 90px 90px;gap:6px;align-items:center}
+.proj-grid.hdr{font-size:8px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.04em;padding-bottom:4px;border-bottom:1px solid #ddd;margin-bottom:4px}
+.proj-grid .name{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px}
+.proj-grid .pct{font-size:18px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.proj-grid .votes{font-size:11px;color:#666;text-align:right;font-variant-numeric:tabular-nums}
+.proj-bar-wrap{height:24px;background:#f0f0ed;border-radius:4px;overflow:hidden;position:relative}
+.proj-bar{height:100%;border-radius:4px;transition:width .5s}
+.proj-bar-label{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.proj-margin{margin-top:8px;font-size:12px;color:#555;padding:6px 10px;background:#f9f9f7;border-radius:4px}
+
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+
+.chart-wrap{background:#fff;border:1px solid #e0e0dc;border-radius:8px;padding:16px;margin-bottom:20px;position:relative}
+.chart-wrap canvas{width:100%!important;height:320px!important}
+.chart-info{font-size:10px;color:#999;margin-top:6px;display:flex;justify-content:space-between}
+
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:7.5px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.05em;padding:3px 5px;text-align:right;border-bottom:1px solid #ddd}
+th:first-child{text-align:left}
+td{padding:3px 5px;text-align:right;border-bottom:1px solid #f0f0ed;font-size:11px}
+td:first-child{text-align:left;font-weight:500}
+.sub{font-size:8px;color:#999;font-weight:400;display:block}
+tr.leader td{font-weight:700;background:#f0fdf4}
+.bar-cell{padding:3px 5px !important}
+.bar-wrap{width:100%;height:8px;background:#f0f0ed;border-radius:2px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:width .4s}
+
+.county-section{max-height:500px;overflow-y:auto;border:1px solid #e0e0dc;border-radius:8px;background:#fff}
+.county-search{padding:8px 12px;border-bottom:1px solid #ddd;position:sticky;top:0;background:#fff;z-index:5}
+.county-search input{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;outline:none}
+.county-row{padding:6px 12px;border-bottom:1px solid #f5f5f3;font-size:11px;display:grid;grid-template-columns:130px repeat(3,1fr) 70px 70px;gap:4px;align-items:center}
+.county-row.hdr{font-size:8px;font-weight:600;color:#aaa;text-transform:uppercase;position:sticky;top:40px;background:#fff;z-index:4;border-bottom:1px solid #ddd;padding:4px 12px}
+.county-row .cname{font-weight:600}
+.county-row .cbar{height:8px;background:#f0f0ed;border-radius:2px;overflow:hidden}
+.county-row .cfill{height:100%;border-radius:2px}
+
+.log{background:#fff;border:1px solid #e0e0dc;border-radius:8px;padding:12px;max-height:160px;overflow-y:auto;font-family:monospace;font-size:10px;color:#666;line-height:1.6}
+
+footer{padding:12px 0;border-top:1px solid #d4d4d4;font-size:10px;color:#999;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1><span class="live-dot" id="live-dot"></span> IL Democratic Senate Primary</h1>
+    <span class="meta" id="hdr-meta">Loading…</span>
+  </header>
+
+  <div class="premise">
+    <strong>Method:</strong> For each county, current vote shares are scaled to that county's expected total vote — treating the county as if fully counted. All 102 county projections are summed for the statewide estimate. As counties report more, the projection sharpens. The chart records each snapshot.
+  </div>
+
+  <div class="controls">
+    <button id="btn-auto" class="active" onclick="toggleAuto()">⏸ Auto (30s)</button>
+    <button onclick="fetchAndRender()">↻ Fetch now</button>
+    <span class="status" id="fetch-status"></span>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="section">
+    <div class="section-title">Projected Final Result (county-by-county extrapolation)</div>
+    <div id="projection"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Projection History</div>
+    <div class="chart-wrap">
+      <canvas id="projChart"></canvas>
+      <div class="chart-info">
+        <span id="chart-points">0 snapshots</span>
+        <span>Each point = one fetch. Candidates projected %, EEVP on right axis.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Actual Results — Statewide</div>
+    <div id="actual-table"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">County Projections (each → 100%)</div>
+    <div class="county-section">
+      <div class="county-search"><input type="text" id="county-filter" placeholder="Search counties…"></div>
+      <div id="county-list"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Fetch Log</div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <footer>
+    <span>Data: NYT / AP · IL Democratic Senate Primary · March 17, 2026</span>
+    <span id="ftr-time"></span>
+  </footer>
+</div>
+
+<script>
+const API = "https://static01.nyt.com/elections-assets/pages/data/2026-03-17/results-illinois-primary.json";
+
+const COLORS = {};
+const PALETTE = ["#2563eb","#dc2626","#16a34a","#f59e0b","#8b5cf6","#ec4899","#06b6d4","#84cc16","#f97316","#6366f1","#14b8a6"];
+let colorIdx = 0;
+
+function getCand(id) {
+  if (COLORS[id]) return COLORS[id];
+  const name = id.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const color = PALETTE[colorIdx % PALETTE.length];
+  colorIdx++;
+  COLORS[id] = { name, color };
+  return COLORS[id];
+}
+
+function nm(n) { return (n || 0).toLocaleString(); }
+function pt(n, d) { return d > 0 ? (n / d * 100).toFixed(1) : "0.0"; }
+function vtCell(val, pool) { return `${nm(val)}<span class="sub">${pt(val, pool)}%</span>`; }
+function vEarly(v) { return v.early_in_person || v.absentee_in_person || 0; }
+function vMail(v) { return v.absentee_mail || 0; }
+function vEday(v) { return v.election_day_in_person || 0; }
+
+let history = [];
+let autoRefresh = true;
+let intervalId = null;
+let chart = null;
+let lastCountyData = [];
+
+function toggleAuto() {
+  autoRefresh = !autoRefresh;
+  const btn = document.getElementById("btn-auto");
+  btn.textContent = autoRefresh ? "⏸ Auto (30s)" : "▶ Auto OFF";
+  btn.classList.toggle("active", autoRefresh);
+  if (autoRefresh) startInterval(); else if (intervalId) clearInterval(intervalId);
+}
+function startInterval() { if (intervalId) clearInterval(intervalId); intervalId = setInterval(fetchAndRender, 30000); }
+function addLog(msg) {
+  const log = document.getElementById("log");
+  const d = document.createElement("div");
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  log.prepend(d);
+}
+
+function findDemSenateRace(data) {
+  for (const r of data.races || []) {
+    const id = r.nyt_id || "";
+    const office = r.office || "";
+    const p = r.party?.nyt_id || r.party?.name || "";
+    if (/senate/i.test(office) && /dem|DEM/i.test(p)) return r;
+  }
+  return null;
+}
+
+// ─── CORE: county-level projection ───
+function projectCounties(race) {
+  const counties = race.reporting_units.filter(u => u.level === "county");
+  const candIds = new Set();
+  counties.forEach(c => c.candidates.forEach(cc => candIds.add(cc.nyt_id)));
+
+  const projByCand = {};
+  const actualByCand = {};
+  [...candIds].forEach(id => { projByCand[id] = 0; actualByCand[id] = 0; });
+
+  let totalProjected = 0;
+  let totalActual = 0;
+  let countiesReporting = 0;
+  let totalExpected = 0;
+
+  const countyDetails = [];
+
+  counties.forEach(county => {
+    const ct = county.total_votes || 0;
+    const expected = county.total_expected_vote || ct;
+    const eevp = county.eevp || 0;
+
+    totalExpected += expected;
+    totalActual += ct;
+    if (ct > 0) countiesReporting++;
+
+    const candData = [];
+    county.candidates.forEach(c => {
+      const v = c.votes.total || 0;
+      // Project: scale this candidate's share to county's expected total
+      const projV = ct > 0 ? Math.round((v / ct) * expected) : 0;
+      projByCand[c.nyt_id] += projV;
+      actualByCand[c.nyt_id] += v;
+      totalProjected += projV;
+      candData.push({
+        id: c.nyt_id,
+        actual: v,
+        projected: projV,
+        pctActual: ct > 0 ? v / ct * 100 : 0,
+        early: vEarly(c.votes),
+        mail: vMail(c.votes),
+        eday: vEday(c.votes),
+        leader: c.leader,
+      });
+    });
+
+    countyDetails.push({
+      name: county.name,
+      actual: ct,
+      expected,
+      eevp,
+      precincts: `${county.precincts_reporting || 0}/${county.precincts_total || 0}`,
+      candidates: candData.sort((a, b) => b.projected - a.projected),
+    });
+  });
+
+  // Build projected results sorted
+  const projResults = [...candIds].map(id => ({
+    id,
+    info: getCand(id),
+    projected: projByCand[id],
+    actual: actualByCand[id],
+    projPct: totalProjected > 0 ? projByCand[id] / totalProjected * 100 : 0,
+    actualPct: totalActual > 0 ? actualByCand[id] / totalActual * 100 : 0,
+  })).sort((a, b) => b.projected - a.projected);
+
+  return { projResults, countyDetails: countyDetails.sort((a, b) => b.expected - a.expected), totalProjected, totalActual, totalExpected, countiesReporting, totalCounties: counties.length };
+}
+
+async function fetchAndRender() {
+  const status = document.getElementById("fetch-status");
+  status.textContent = "Fetching…";
+  try {
+    const resp = await fetch(API, { cache: "no-store" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const race = findDemSenateRace(data);
+    if (!race) {
+      addLog("ERROR: Dem Senate race not found");
+      (data.races || []).forEach(r => addLog(`  Found: ${r.nyt_id} | ${r.office} | ${r.party?.name || "?"}`));
+      status.textContent = "Race not found";
+      return;
+    }
+    render(race);
+    const ru = race.reporting_units.find(u => u.level === "state") || race.reporting_units[0];
+    status.textContent = `OK — ${new Date().toLocaleTimeString()}`;
+    addLog(`Fetched: EEVP ${ru?.eevp}% | ${nm(ru?.total_votes)} votes`);
+  } catch (err) {
+    addLog(`ERROR: ${err.message}`);
+    status.textContent = `Error: ${err.message}`;
+  }
+}
+
+function render(race) {
+  const stateRU = race.reporting_units.find(u => u.level === "state") || race.reporting_units[0];
+  const stateTotal = stateRU.total_votes || 0;
+  const eevp = stateRU.eevp || 0;
+  const winner = race.outcome?.won?.[0] || null;
+
+  const proj = projectCounties(race);
+  lastCountyData = proj.countyDetails;
+
+  // Header
+  document.getElementById("hdr-meta").textContent =
+    `${eevp}% est. vote · ${nm(stateTotal)} actual votes · ${proj.countiesReporting}/${proj.totalCounties} counties reporting` +
+    (winner ? ` · Winner: ${getCand(winner).name}` : "");
+
+  // Cards
+  const top3 = proj.projResults.slice(0, 3);
+  document.getElementById("cards").innerHTML = top3.map(c => `
+    <div class="card" style="border-top:4px solid ${c.info.color}">
+      <div class="label">${c.info.name}</div>
+      <div class="value" style="color:${c.info.color}">${c.projPct.toFixed(1)}%</div>
+      <div class="sub">Proj: ~${nm(c.projected)} · Actual: ${nm(c.actual)} (${c.actualPct.toFixed(1)}%)</div>
+    </div>
+  `).join("") + `
+    <div class="card">
+      <div class="label">EEVP / Coverage</div>
+      <div class="value">${eevp}%</div>
+      <div class="sub">${nm(stateTotal)} actual · ~${nm(proj.totalExpected)} expected</div>
+    </div>
+    <div class="card">
+      <div class="label">Counties</div>
+      <div class="value">${proj.countiesReporting}/${proj.totalCounties}</div>
+      <div class="sub">with votes in</div>
+    </div>
+  `;
+
+  // Projection
+  const projDiv = document.getElementById("projection");
+  const maxPct = proj.projResults[0]?.projPct || 1;
+  let ph = `<div class="proj-grid hdr"><div>Candidate</div><div>Projected share</div><div style="text-align:right">Proj %</div><div style="text-align:right">Proj votes</div><div style="text-align:right">Actual</div></div>`;
+  proj.projResults.forEach(c => {
+    if (c.projected === 0) return;
+    const isW = c.id === winner;
+    ph += `<div class="proj-grid">
+      <div class="name"><span class="dot" style="background:${c.info.color}"></span>${c.info.name}${isW ? " ✓" : ""}</div>
+      <div class="proj-bar-wrap">
+        <div class="proj-bar" style="width:${c.projPct / maxPct * 100}%;background:${c.info.color}"></div>
+        <span class="proj-bar-label">${c.projPct.toFixed(1)}%</span>
+      </div>
+      <div class="pct" style="color:${c.info.color}">${c.projPct.toFixed(1)}%</div>
+      <div class="votes">~${nm(c.projected)}</div>
+      <div class="votes">${nm(c.actual)}</div>
+    </div>`;
+  });
+
+  if (proj.projResults.length >= 2) {
+    const a = proj.projResults[0], b = proj.projResults[1];
+    const mVotes = a.projected - b.projected;
+    const mPct = (a.projPct - b.projPct).toFixed(1);
+    ph += `<div class="proj-margin">
+      Projected margin: <strong style="color:${a.info.color}">${a.info.name} +${mPct}pt</strong> (~${nm(mVotes)} votes)
+      · Based on ${proj.countiesReporting}/${proj.totalCounties} counties, each scaled to 100% of expected vote
+    </div>`;
+  }
+  projDiv.innerHTML = ph;
+
+  // Actual table
+  const stateCands = [...stateRU.candidates].sort((a, b) => b.votes.total - a.votes.total);
+  const pool = {
+    early: stateCands.reduce((s, c) => s + vEarly(c.votes), 0),
+    mail: stateCands.reduce((s, c) => s + vMail(c.votes), 0),
+    eday: stateCands.reduce((s, c) => s + vEday(c.votes), 0),
+  };
+  const maxV = stateCands[0]?.votes.total || 1;
+  let th = `<table><thead><tr><th>Candidate</th><th style="width:50px">Bar</th><th>%</th><th>Actual</th><th>Early</th><th>Mail</th><th>E-Day</th></tr></thead><tbody>`;
+  stateCands.forEach(c => {
+    const info = getCand(c.nyt_id);
+    const v = c.votes.total || 0;
+    if (v === 0) return;
+    const pct = pt(v, stateTotal);
+    const early = vEarly(c.votes), mail = vMail(c.votes), ed = vEday(c.votes);
+    const cls = c.leader ? "leader" : "";
+    const isW = c.nyt_id === winner;
+    th += `<tr class="${cls}">
+      <td><span class="dot" style="background:${info.color}"></span>${info.name}${isW ? " ✓" : ""}</td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${v / maxV * 100}%;background:${info.color}"></div></div></td>
+      <td style="font-weight:700">${pct}%</td>
+      <td>${nm(v)}</td>
+      <td>${vtCell(early, pool.early)}</td>
+      <td>${vtCell(mail, pool.mail)}</td>
+      <td>${vtCell(ed, pool.eday)}</td>
+    </tr>`;
+  });
+  th += `</tbody></table>`;
+  th += `<div style="font-size:10px;color:#999;margin-top:4px">Early ${nm(pool.early)} (${pt(pool.early, stateTotal)}%) · Mail ${nm(pool.mail)} (${pt(pool.mail, stateTotal)}%) · E-Day ${nm(pool.eday)} (${pt(pool.eday, stateTotal)}%)</div>`;
+  document.getElementById("actual-table").innerHTML = th;
+
+  // County list
+  renderCountyList(document.getElementById("county-filter")?.value || "");
+
+  // History snapshot
+  const snap = {
+    time: new Date().toLocaleTimeString(),
+    eevp,
+    totalActual: stateTotal,
+    countiesIn: proj.countiesReporting,
+    candidates: proj.projResults.filter(c => c.projected > 0).map(c => ({
+      id: c.id, name: c.info.name, color: c.info.color,
+      projPct: parseFloat(c.projPct.toFixed(2)),
+      actualPct: parseFloat(c.actualPct.toFixed(2)),
+      projected: c.projected, actual: c.actual,
+    }))
+  };
+  const last = history[history.length - 1];
+  if (!last || last.totalActual !== stateTotal || last.eevp !== eevp) {
+    history.push(snap);
+  }
+  updateChart();
+
+  document.getElementById("ftr-time").textContent = `Last fetch: ${new Date().toLocaleString()}`;
+  if (eevp >= 99) document.getElementById("live-dot").style.background = "#999";
+}
+
+function renderCountyList(filter) {
+  const fl = filter.toLowerCase();
+  const list = fl ? lastCountyData.filter(c => c.name.toLowerCase().includes(fl)) : lastCountyData;
+  const container = document.getElementById("county-list");
+
+  let h = `<div class="county-row hdr"><div>County</div><div>1st place</div><div>2nd place</div><div>3rd place</div><div style="text-align:right">Actual</div><div style="text-align:right">Projected</div></div>`;
+
+  list.forEach(county => {
+    const top3 = county.candidates.slice(0, 3);
+    h += `<div class="county-row">
+      <div class="cname">${county.name}<span class="sub">${county.eevp}% · ${county.precincts}</span></div>`;
+
+    top3.forEach(c => {
+      const info = getCand(c.id);
+      const pct = c.pctActual.toFixed(1);
+      h += `<div>
+        <span class="dot" style="background:${info.color};width:6px;height:6px"></span>
+        <strong>${info.name.split(" ").pop()}</strong> ${pct}%
+        <span class="sub">P: ~${nm(c.projected)} · A: ${nm(c.actual)}</span>
+        <span class="sub">E: ${nm(c.early)} · M: ${nm(c.mail)} · D: ${nm(c.eday)}</span>
+      </div>`;
+    });
+
+    // Pad if fewer than 3
+    for (let i = top3.length; i < 3; i++) h += `<div>—</div>`;
+
+    h += `<div style="text-align:right;font-variant-numeric:tabular-nums">${nm(county.actual)}<span class="sub">${county.eevp}%</span></div>`;
+    h += `<div style="text-align:right;font-variant-numeric:tabular-nums">~${nm(county.expected)}<span class="sub">100%</span></div>`;
+    h += `</div>`;
+  });
+
+  container.innerHTML = h;
+}
+
+function updateChart() {
+  if (!history.length) return;
+
+  const allIds = new Set();
+  history.forEach(h => h.candidates.forEach(c => allIds.add(c.id)));
+  const topIds = [...allIds].filter(id => history.some(h => {
+    const c = h.candidates.find(x => x.id === id);
+    return c && c.projPct > 2;
+  }));
+
+  const labels = history.map(h => `${h.time}\n${h.eevp}% · ${h.countiesIn}co`);
+
+  const datasets = topIds.map(id => {
+    const info = getCand(id);
+    return {
+      label: info.name + " (proj)",
+      data: history.map(h => { const c = h.candidates.find(x => x.id === id); return c ? c.projPct : null; }),
+      borderColor: info.color,
+      backgroundColor: info.color + "15",
+      borderWidth: 2.5,
+      pointRadius: 4,
+      pointBackgroundColor: info.color,
+      tension: 0.3,
+      spanGaps: true,
+      fill: false,
+    };
+  });
+
+  // Actual % as dashed lines
+  topIds.forEach(id => {
+    const info = getCand(id);
+    datasets.push({
+      label: info.name + " (actual)",
+      data: history.map(h => { const c = h.candidates.find(x => x.id === id); return c ? c.actualPct : null; }),
+      borderColor: info.color + "60",
+      borderWidth: 1.5,
+      borderDash: [4, 3],
+      pointRadius: 0,
+      tension: 0.3,
+      spanGaps: true,
+      fill: false,
+    });
+  });
+
+  datasets.push({
+    label: "EEVP %",
+    data: history.map(h => h.eevp),
+    borderColor: "#d4d4d4",
+    borderWidth: 1.5,
+    borderDash: [6, 4],
+    pointRadius: 0,
+    tension: 0.3,
+    fill: false,
+    yAxisID: "eevp",
+  });
+
+  const ctx = document.getElementById("projChart");
+  if (chart) {
+    chart.data.labels = labels;
+    chart.data.datasets = datasets;
+    chart.update("none");
+  } else {
+    chart = new Chart(ctx, {
+      type: "line",
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "top", labels: { font: { size: 10 }, usePointStyle: true, pointStyle: "circle" } },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const v = ctx.parsed.y;
+                return ctx.dataset.yAxisID === "eevp" ? `EEVP: ${v}%` : `${ctx.dataset.label}: ${v.toFixed(1)}%`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: { title: { display: true, text: "Vote %", font: { size: 11 } }, min: 0, grid: { color: "#f0f0ed" } },
+          eevp: { position: "right", title: { display: true, text: "EEVP %", font: { size: 11 } }, min: 0, max: 100, grid: { drawOnChartArea: false } },
+          x: { ticks: { font: { size: 8 }, maxRotation: 45 }, grid: { color: "#f7f7f5" } }
+        }
+      }
+    });
+  }
+  document.getElementById("chart-points").textContent = `${history.length} snapshots`;
+}
+
+// Wire up county filter
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("county-filter")?.addEventListener("input", e => renderCountyList(e.target.value));
+});
+
+fetchAndRender();
+startInterval();
+</script>
+</body>
+</html>
